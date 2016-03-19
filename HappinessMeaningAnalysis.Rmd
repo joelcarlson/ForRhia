@@ -1,0 +1,160 @@
+---
+title: "Happiness and Meaning Data Analysis"
+author: "Rhia Catapano"
+date: "March 18, 2016"
+output: html_document
+---
+
+```{r, echo=FALSE, message=FALSE}
+library(ggplot2)
+library(reshape2)
+library(knitr)
+library(dplyr)
+```
+
+```{r, message=FALSE, warning=FALSE}
+m_h_dat <- read.csv("https://raw.githubusercontent.com/joelcarlson/ForRhia/master/RhiaMeaningHappMar17.csv")
+#Drop the attention check answers to lowercase
+m_h_dat$What.company.was.the.advertisement.for. <- tolower(m_h_dat$What.company.was.the.advertisement.for.)
+
+#Filter out anyone who didnt say either chrome, gmail, or google somewhere in their answer
+m_h_dat_attn_pass <- filter(m_h_dat, grepl("chrome", What.company.was.the.advertisement.for.) |
+                                      grepl("gmail", What.company.was.the.advertisement.for.)  |
+                                      grepl("google", What.company.was.the.advertisement.for.))
+
+#Remove attention check column
+m_h_dat <- select(m_h_dat, -What.company.was.the.advertisement.for.)
+m_h_dat_attn_pass <- select(m_h_dat_attn_pass, -What.company.was.the.advertisement.for.)
+
+m_h_melt <- melt(m_h_dat)
+
+
+ggplot(data=m_h_melt, aes(x=variable, y=value, fill=Condition)) + geom_boxplot()+
+  ggtitle("All Participants \n (Median as center line)")
+```
+
+This graph is indeed correct, as bizarre as it looks. A boxplot does not show the mean within groups, it shows the median. As we can see below, the medians for each group are identical:
+
+```{r}
+kable(m_h_melt %>% group_by(Condition, variable) %>% summarize(median(value), mean(value)))
+```
+
+If we really want to see the means in the boxplot then we can do a little work:
+
+```{r}
+mean_bp_dat <- m_h_melt %>% group_by(Condition, variable) %>% summarize(ymin=min(value),
+                                                         y25=quantile(value,0.25),
+                                                         ymean=mean(value),
+                                                         y75=quantile(value,0.75),
+                                                         ymax=max(value))
+ggplot(data=mean_bp_dat, aes(x=variable)) +
+  geom_boxplot(
+    aes(ymin = ymin, lower = y25, middle = ymean, upper = y75, ymax = ymax, fill=Condition),
+    stat = "identity"
+  ) +
+  ggtitle("All Participants\n (Mean as center line)")
+```
+
+##Statistical Significance
+
+Assuming you are wanting to use t-tests:
+
+```{r}
+get_t_test <- function(data, ref, target, column, digits=3){
+  t_test <- t.test(filter(data, Condition == ref)[[column]], 
+                   filter(data, Condition == target)[[column]])
+  list("ref" = ref,
+       "target" = target,
+       "ref_mean"  = round(unname(t_test$estimate[1]),digits),
+       "target_mean"  = round(unname(t_test$estimate[2]),digits),
+       "mean_diff"= round(unname(diff(t_test$estimate)),digits),
+       "p"        = round(t_test$p.value,digits),
+       "lower"    = round(t_test$conf.int[1],digits),
+       "upper"    = round(t_test$conf.int[2],digits)
+       )
+}
+
+t_happiness <- list(
+  get_t_test(data=m_h_dat, ref="nonparents1", target="nonparents2", column="Rate.Happiness."),
+  get_t_test(data=m_h_dat, ref="nonparents1", target="parents", column="Rate.Happiness."),
+  get_t_test(data=m_h_dat, ref="nonparents2", target="parents", column="Rate.Happiness.")
+)
+
+t_meaning <- list(
+  get_t_test(data=m_h_dat, ref="nonparents1", target="nonparents2", column="Rate.Meaningfulness."),
+  get_t_test(data=m_h_dat, ref="nonparents1", target="parents", column="Rate.Meaningfulness."),
+  get_t_test(data=m_h_dat, ref="nonparents2", target="parents", column="Rate.Meaningfulness.")
+)
+```
+
+###Happiness
+
+```{r}
+kable(do.call(rbind.data.frame, t_happiness))
+```
+
+###Meaningfulness
+
+```{r}
+kable(do.call(rbind.data.frame, t_meaning))
+```
+
+
+#Do it all over again with the people who passed the attention check!
+
+There are `r nrow(m_h_dat_attn_pass)` participants who passed the attn check.
+
+```{r, message=FALSE, error=FALSE, echo=FALSE}
+m_h_melt_attn_pass <- melt(m_h_dat_attn_pass)
+ggplot(data=m_h_melt_attn_pass, aes(x=variable, y=value, fill=Condition)) + geom_boxplot()+
+  ggtitle("Participants who Passed Attn. Check \n (Median as center line)")
+
+
+kable(m_h_melt_attn_pass %>% group_by(Condition, variable) %>% summarize(median(value), mean(value)))
+
+mean_bp_dat_attn_pass <- m_h_melt_attn_pass %>% 
+  group_by(Condition, variable) %>% 
+  summarize(ymin=min(value),
+            y25=quantile(value,0.25),
+            ymean=mean(value),
+            y75=quantile(value,0.75),
+            ymax=max(value))
+
+ggplot(data=mean_bp_dat_attn_pass, aes(x=variable)) +
+  geom_boxplot(
+    aes(ymin = ymin, lower = y25, middle = ymean, upper = y75, ymax = ymax, fill=Condition),
+    stat = "identity"
+  ) +
+  ggtitle("Participants who Passed Attn. Check \n (Mean as center line)")
+```
+
+##Statistical Significance 
+###(Participants who passed attn check)
+
+
+```{r, echo=FALSE}
+t_happiness <- list(
+  get_t_test(data=m_h_dat_attn_pass, ref="nonparents1", target="nonparents2", column="Rate.Happiness."),
+  get_t_test(data=m_h_dat_attn_pass, ref="nonparents1", target="parents", column="Rate.Happiness."),
+  get_t_test(data=m_h_dat_attn_pass, ref="nonparents2", target="parents", column="Rate.Happiness.")
+)
+
+t_meaning <- list(
+  get_t_test(data=m_h_dat_attn_pass, ref="nonparents1", target="nonparents2", column="Rate.Meaningfulness."),
+  get_t_test(data=m_h_dat_attn_pass, ref="nonparents1", target="parents", column="Rate.Meaningfulness."),
+  get_t_test(data=m_h_dat_attn_pass, ref="nonparents2", target="parents", column="Rate.Meaningfulness.")
+)
+```
+
+###Happiness
+
+```{r, echo=FALSE}
+kable(do.call(rbind.data.frame, t_happiness))
+```
+
+###Meaningfulness
+
+```{r, echo=FALSE}
+kable(do.call(rbind.data.frame, t_meaning))
+```
+
